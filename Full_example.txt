@@ -1,0 +1,272 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import control as ct
+import math as mt
+
+plt.close('all')
+
+
+# ------------------------------------------------------
+# Supplied rlocfind() function from lab template
+# ------------------------------------------------------
+
+def rlocfind(SYS, Ks, xlimits, ylimits, Zta):
+    Freq = np.linspace(0, 5, 50)
+    Angl = mt.acos(Zta)
+    TanTheta = mt.tan(Angl)
+    SigVals = -1 * Freq / TanTheta
+
+    plt.plot(SigVals, Freq)
+
+    ct.root_locus(SYS, Ks, xlim=xlimits, ylim=ylimits, print_gain=True, grid=False)
+
+    with plt.ion():
+        SelPt = plt.ginput(n=-1)
+
+    plt.ioff()
+
+    SelPt = SelPt[-1]
+
+    print('Point clicked:', SelPt)
+
+    PtX = SelPt[0][0]
+    PtY = SelPt[0][1]
+
+    RLroots, RLgains = ct.root_locus(SYS, Ks, xlim=xlimits, ylim=ylimits, plot=False, grid=False)
+
+    N, NumPoles = RLroots.shape
+
+    MinDist = np.zeros(NumPoles)
+    GainWanted = np.zeros(NumPoles)
+
+    for k in range(NumPoles):
+        RtReal = np.real(RLroots[0:, k])
+        RtImag = np.imag(RLroots[0:, k])
+
+        Dist = (RtReal - PtX)**2 + (RtImag - PtY)**2
+
+        MinDist[k] = Dist.min()
+
+        GainIdx = Dist.argmin()
+        GainWanted[k] = RLgains[GainIdx]
+
+    MinBranch = MinDist.argmin()
+    GnWanted = GainWanted[MinBranch]
+
+    return GnWanted, SelPt
+
+
+# ------------------------------------------------------
+# START YOUR CODE HERE
+# ------------------------------------------------------
+
+# ------------------------------------------------------
+# 1. Define open-loop transfer function
+# Example:
+# G(s) = 1 / ((s + 2)(s + 5))
+# Poles are at s = -2 and s = -5
+# ------------------------------------------------------
+
+G_forward = ct.tf(1, np.poly([-2, -5]))
+
+print("Open-loop transfer function:")
+print(G_forward)
+
+
+# ------------------------------------------------------
+# 2. Calculate step steady-state error
+# For unity feedback:
+# ess = 1 / (1 + Kp)
+# Kp = G(0), found using ct.dcgain()
+# ------------------------------------------------------
+
+Kp = ct.dcgain(G_forward)
+ess = 1 / (1 + Kp)
+
+print("Position error constant Kp =", Kp)
+print("Step steady-state error ess =", ess)
+
+
+# ------------------------------------------------------
+# 3. Create closed-loop transfer function
+# Always use two inputs for feedback
+# ------------------------------------------------------
+
+T_closed = ct.feedback(G_forward, 1)
+
+print("Closed-loop transfer function:")
+print(T_closed)
+
+
+# ------------------------------------------------------
+# 4. Find poles of closed-loop transfer function
+# ------------------------------------------------------
+
+p_vals = ct.poles(T_closed)
+
+print("Closed-loop poles:")
+print(p_vals)
+
+
+# ------------------------------------------------------
+# 5. Select dominant pole using input()
+# Do not hard code the pole value
+# ------------------------------------------------------
+
+dom = int(input("Enter the index of the dominant pole: "))
+
+
+# ------------------------------------------------------
+# 6. Calculate pole characteristics
+# Pole form:
+# s = -sigma_d +/- j omega_d
+# Use abs() so the program handles negative real parts correctly
+# ------------------------------------------------------
+
+sigma_d = abs(np.real(p_vals[dom]))
+omega_d = abs(np.imag(p_vals[dom]))
+
+print("sigma_d =", sigma_d)
+print("omega_d =", omega_d)
+
+
+# ------------------------------------------------------
+# 7. Calculate second-order response characteristics
+# From formula sheet:
+# omega_n = sqrt(sigma_d^2 + omega_d^2)
+# Tp = pi / omega_d
+# Ts = 4 / sigma_d
+# %OS = exp((-sigma_d*pi)/omega_d) * 100
+# ------------------------------------------------------
+
+omega_n = np.sqrt(sigma_d**2 + omega_d**2)
+
+print("Natural frequency omega_n =", omega_n)
+
+if omega_d > 0:
+    Tp = np.pi / omega_d
+    OS = np.exp((-sigma_d * np.pi) / omega_d) * 100
+
+    print("Peak time Tp =", Tp)
+    print("Percent overshoot OS =", OS)
+else:
+    print("Peak time Tp is not calculated because omega_d = 0")
+    print("Percent overshoot is not calculated because omega_d = 0")
+
+if sigma_d > 0:
+    Ts = 4 / sigma_d
+    print("Settling time Ts =", Ts)
+else:
+    print("Settling time Ts is not calculated because sigma_d = 0")
+
+
+# ------------------------------------------------------
+# 8. Calculate damping ratio from desired percent overshoot
+# Example: 10 percent overshoot
+# ------------------------------------------------------
+
+desired_OS = 10
+
+Zeta = -np.log(desired_OS / 100) / np.sqrt(np.pi**2 + np.log(desired_OS / 100)**2)
+
+print("Desired percent overshoot =", desired_OS)
+print("Required damping ratio Zeta =", Zeta)
+
+
+# ------------------------------------------------------
+# 9. Root locus gain selection using rlocfind()
+# The open-loop system is used here.
+# Click on the root locus near the damping-ratio line, then press Enter.
+# ------------------------------------------------------
+
+Kvals = np.linspace(0, 100, 1000)
+
+K_selected, selected_point = rlocfind(G_forward, Kvals, [-10, 1], [-10, 10], Zeta)
+
+print("Selected gain K =", K_selected)
+print("Selected point =", selected_point)
+
+
+# ------------------------------------------------------
+# 10. Create gain-adjusted closed-loop transfer function
+# ------------------------------------------------------
+
+G_gain = K_selected * G_forward
+T_selected = ct.feedback(G_gain, 1)
+
+print("Closed-loop transfer function with selected gain:")
+print(T_selected)
+
+
+# ------------------------------------------------------
+# 11. Poles of selected closed-loop system
+# ------------------------------------------------------
+
+p_selected = ct.poles(T_selected)
+
+print("Poles of selected closed-loop system:")
+print(p_selected)
+
+
+# ------------------------------------------------------
+# 12. Stability check
+# Stable if all real parts are less than zero
+# ------------------------------------------------------
+
+stable = True
+
+for k in range(len(p_selected)):
+    if np.real(p_selected[k]) >= 0:
+        stable = False
+
+if stable == True:
+    print("The selected closed-loop system is stable")
+else:
+    print("The selected closed-loop system is not stable")
+
+
+# ------------------------------------------------------
+# 13. Select dominant pole again for selected-gain system
+# ------------------------------------------------------
+
+dom_selected = int(input("Enter the index of the dominant pole for selected-gain system: "))
+
+sigma_selected = abs(np.real(p_selected[dom_selected]))
+omega_selected = abs(np.imag(p_selected[dom_selected]))
+
+omega_n_selected = np.sqrt(sigma_selected**2 + omega_selected**2)
+
+print("Selected system sigma_d =", sigma_selected)
+print("Selected system omega_d =", omega_selected)
+print("Selected system omega_n =", omega_n_selected)
+
+if omega_selected > 0:
+    Tp_selected = np.pi / omega_selected
+    OS_selected = np.exp((-sigma_selected * np.pi) / omega_selected) * 100
+
+    print("Selected system peak time Tp =", Tp_selected)
+    print("Selected system percent overshoot OS =", OS_selected)
+else:
+    print("Selected system peak time Tp is not calculated because omega_d = 0")
+    print("Selected system percent overshoot is not calculated because omega_d = 0")
+
+if sigma_selected > 0:
+    Ts_selected = 4 / sigma_selected
+    print("Selected system settling time Ts =", Ts_selected)
+else:
+    print("Selected system settling time Ts is not calculated because sigma_d = 0")
+
+
+# ------------------------------------------------------
+# 14. Plot step response of final selected system
+# ------------------------------------------------------
+
+t_vals, c_vals = ct.step_response(T_selected)
+
+plt.figure()
+plt.plot(t_vals, c_vals)
+plt.xlabel("Time")
+plt.ylabel("Output")
+plt.title("Step Response of Selected Closed-Loop System")
+plt.grid()
+plt.show()

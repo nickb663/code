@@ -1,0 +1,196 @@
+import control as ct
+import numpy as np
+
+## Representing Transfer Functions
+#G = Open Loop Transfer function
+#T = Closed loop transfer function
+
+#basic
+
+num = [3]
+den = [5]
+G = ct.tf(num,den)
+
+# for G(s) = 5 / (s+1)(s+2) use:
+
+G = ct.tf(5, np.poly([-1, -2]))
+
+# numerator with a zero
+
+G = ct.tf([1,5], np.poly([-1, -2]))
+
+## Feedback Systems
+
+#Unity Feedback: T(s) = G(s) / 1 + G(s)
+
+T = ct.feedback(G, 1)
+
+#Non-unity feedback: T(s) = G(s) / 1+G(s)H(s)
+
+T = ct.feedback(G, H)
+
+## Block algebra
+
+#Series G1 -> G2
+series = G1 * G2
+
+# Parallel = same direction
+parallel = G1 + G2
+
+#Feedback loop = going back (FeedBACK)
+ct.feedback()
+
+#Open Loop function (Non-unity)-> uunity transfer function
+
+Gf = G_forward / (1 + G_forward * H_feedback - G_forward)
+Gf = ct.minreal(Gf)
+
+
+## Error Calculations - Step input
+# e_ss = 1 / 1 + K_p
+#K_p = lim(s->0)G(s)
+
+Kp = ct.dcgain(G_open)
+ess = 1 / (1+Kp)
+
+## Poles and second-order characteristics
+# s = -sigma_d +- j omega_d
+# omega_n = sqrt(sigma_d**2 + omega_d**2)
+# Tp = pi / omega_d
+# Ts = 4 / sigma_d
+# %OS = e^(sigma_d*pi/omega_d) * 100
+
+# do not use ct.step_info() use only for simulated charactersitics
+
+## Selecting dominant pole
+
+# Must select using input()
+# The dominant poles are normally the poles closest to the imaginary axis, meaning the ones with the smallest absolute real part
+
+p_vals = ct.poles(T_closed)
+
+dom = int(input("Enter index of dominant pole: "))
+
+sigma_d = abs(np.real(p_vals[dom]))
+omega_d = abs(np.imag(p_vals[dom]))
+
+## Damping ratio from overshoot
+
+OS = 10
+
+# from formula sheet
+Zeta = -np.log(OS / 100) / np.sqrt(np.pi**2 + np.log(OS / 100)**2)
+
+# Used for root locus damping lines
+
+## Second order approximation
+
+# T(s) = b / s^2 + as + b
+# b = omega_n**2
+# a = 2 * Zeta * omega_n
+
+
+## Root Locus
+
+# using rlocfind in the template
+# The function plots the root locus, overlays a damping-ratio line, lets you click a point, and returns the gain and selected point
+
+K, pt = rlocfind(GH, Kvals, [-10,0.1], [-5,5], Zeta)
+
+Kvals = np.linsapce(0, 100, 1000)
+
+# Basic Structure
+
+G_forward = ct.tf(1, np.poly([-2, -5]))
+
+Kvals = np.linspace(0, 100, 1000)
+
+OS = 10
+Zeta = -np.log(OS / 100) / np.sqrt(np.pi**2 + np.log(OS / 100)**2)
+
+K_selected, selected_point = rlocfind(G_forward, Kvals, [-10, 1], [-10, 10], Zeta)
+
+print("Selected gain =", K_selected)
+print("Selected point =", selected_point)
+
+#Then create the closed-loop transfer function using the selected gain
+
+G_gain = K_selected * G_forward
+T_closed = ct.feedback(G_gain, 1)
+
+## Regions of stability
+
+# Stable when real part < 0
+# Unstable when real part > 0
+# Marginally stable when real part = 0
+
+p_vals = ct.poles(T_closed)
+
+for k in range(len(p_vals)):
+    if np.real(p_vals[k]) < 0:
+        print("Pole", k, "is stable")
+    elif np.real(p_vals[k]) > 0:
+        print("Pole", k, "is unstable")
+    else:
+        print("Pole", k, "is marginal")
+
+## Step response plotting
+
+t_vals, c_vals = ct.step_response(T_closed)
+
+plt.figure()
+plt.plot(t_vals, c_vals)
+plt.xlabel("Time")
+plt.ylabel("Output")
+plt.title("Step response")
+plt.grid()
+plt.show()
+
+
+# ------------------------------------------------------
+# Plot step response and overlay input function
+# ------------------------------------------------------
+
+t_vals, c_vals = ct.step_response(T_closed)
+
+# Step input is 1 for all time values
+input_vals = np.ones(len(t_vals))
+
+plt.figure()
+plt.plot(t_vals, input_vals, label="Input step")
+plt.plot(t_vals, c_vals, label="Output response")
+plt.xlabel("Time")
+plt.ylabel("Amplitude")
+plt.title("Step Input and Step Response")
+plt.legend()
+plt.grid()
+plt.show()
+
+
+## Things that will lose marks
+
+# not using np.poly
+G = ct.tf(5, [1, 3, 2])
+
+# Use calculated not simulated characteristics
+info = ct.step_info(T_closed)
+Ts = info["SettlingTime"]
+
+# Hard coding
+sigma_d = 3
+omega_d = 4
+
+# Avoid variable names like
+poles = ct.poles(T_closed)
+zeros = ct.zeros(T_closed)
+real = np.real(...)
+imag = np.imag(...)
+tf = ct.tf(...)
+
+# Use this instead
+p_vals = ct.poles(T_closed)
+z_vals = ct.zeros(T_closed)
+real_part = np.real(p_vals[dom])
+imag_part = np.imag(p_vals[dom])
+
+
