@@ -1,0 +1,283 @@
+# -*- coding: utf-8 -*-
+"""
+Created 2024
+
+@author: b.schwerin
+"""
+
+import matplotlib.pyplot as plt
+import numpy as np
+import control as ct
+import math as mt
+#import control.matlab as ct
+plt.close('all')
+
+def rlocfind(SYS, Ks, xlimits, ylimits, Zta):
+    Freq = np.linspace(0,5,50)
+    Angl = mt.acos(Zta)
+    TanTheta = mt.tan(Angl)
+    SigVals = -1*Freq/TanTheta
+
+    plt.plot(SigVals,Freq)
+    
+    ct.root_locus(SYS, Ks, xlim=xlimits,ylim=ylimits, print_gain=True, grid=False)
+    with plt.ion():
+        SelPt = plt.ginput(n=-1)   #for unlimited clicks
+    plt.ioff()
+    SelPt = SelPt[-1]              # take last click;  after select the point, press enter and point is saved for you
+    print('POint clicked:', SelPt)
+    PtX = SelPt[0][0]
+    PtY = SelPt[0][1]
+
+    RLroots, RLgains  = ct.root_locus(SYS, Ks, xlim=xlimits, ylim=ylimits, plot=False,grid=False)
+    N, NumPoles = RLroots.shape
+    MinDist = np.zeros(NumPoles)
+    GainWanted = np.zeros(NumPoles)
+    
+    for k in range(NumPoles):
+        RtReal = np.real(RLroots[0:,k])
+        RtImag = np.imag(RLroots[0:,k])
+        Dist = (RtReal-PtX)**2 + (RtImag-PtY)**2
+        MinDist[k] = Dist.min()        #need to check each branch if more than 2
+        GainIdx = Dist.argmin()
+        GainWanted[k] = RLgains[GainIdx]
+        
+    MinBranch = MinDist.argmin()
+    GnWanted = GainWanted[MinBranch]
+    return GnWanted, SelPt
+
+#---------------------------------------------------
+# to plot root locus, and overlay line of constant damping:
+# Kwant, SelPoint = rlocfind(GH, Kvals, [-10,0], [-5,5], Zeta)
+# Inputs:   GH is open loop transfer function
+#           Kvals is vector of gains (can create using linspace)
+#           [-10,0] is the xlimits of the root locus shown - change as required
+#           [-5,5]  is the ylimits of the root locus shown - change as required
+#           Zeta is the value of your damping ratio - calculate before calling function.
+# Outputs:  Kwant = gain at selected point
+# SelPoint: is the x,y values of point selected
+# NOTE: only first point clicked on is used to determine gain for rest of function. 
+
+# ------------------------------------------------------
+# START YOU CODE HERE
+
+
+##Q1
+
+G1 = ct.tf(3, [1,2])
+G2 = ct.tf(1, np.poly([-1,-5]))
+H = ct.tf(1, [1,3])
+
+Kp = 4
+Cs = Kp
+
+#Transfer function
+#Foward path
+
+G_forward = Kp * G1 * G2
+
+#Feedback transfer function (Closed Loop Transfer function)
+
+Ts = ct.feedback(G_forward, H)
+
+#Print cl tf
+
+print("Closed loop transfer function: ", Ts)
+
+#Find poles and zeros
+
+p_vals = ct.poles(Ts)
+z_vals = ct.zeros(Ts)
+
+print("Poles: ", p_vals)
+print("Zeros: ", z_vals)
+
+#Plot pole-zero map
+
+ct.pzmap(Ts)
+plt.show()
+
+
+##Q2
+
+
+#Simulated characteristics
+
+sim_info = ct.step_info(Ts)
+print("Simulated Characteristics")
+print(sim_info)
+
+
+#Print closed loop poles and allow user to select dom pole using input()
+
+dom = int(input("Enter index of dominant pole: "))
+sigma_d = abs(np.real(p_vals[dom]))
+omega_d = abs(np.imag(p_vals[dom]))
+
+print("Sigma_d = ", sigma_d)
+print("Omega_d = ", omega_d)
+
+
+#Plot Step response
+
+t_vals, c_vals = ct.step_response(Ts)
+plt.figure()
+plt.plot(t_vals, c_vals)
+plt.title("Step response of selected closed loop system")
+plt.xlabel("Time")
+plt.ylabel("Output")
+plt.show()
+
+#Calculating characteristics
+#sigma_d, omega_d, omega_n, Zeta, Tp, Ts, %OS
+
+sigma_d = abs(np.real(p_vals[dom]))
+omega_d = abs(np.imag(p_vals[dom]))
+
+omega_n = np.sqrt(sigma_d**2 + omega_d**2)
+
+OS = np.exp((-sigma_d*np.pi) / omega_d) * 100
+
+Zeta = -np.log(OS / 100) / np.sqrt(np.pi**2 + np.log(OS / 100)**2)
+
+Tpeak = np.pi / omega_d
+Tsettling = 4 / sigma_d
+
+
+print("Sigma_d = ", sigma_d)
+print("Omega_d = ", omega_d)
+print("Omega_n = ", omega_n)
+print("% OS = ", OS)
+print("Zeta = ", Zeta)
+print("Settling Time = ", Tsettling)
+print("Peak Time = ", Tpeak)
+
+#Compare Simulated to calculated
+
+#Very far apart
+
+##Q3
+
+Ts1 = ct.tf([1, 2.5], [1, 7, 30, 40])
+
+#Poles and Zeros
+
+p1_vals = ct.poles(Ts1)
+z1_vals = ct.zeros(Ts1)
+
+print("Poles: ", p1_vals)
+print("Zeros = ", z1_vals)
+
+
+#Plot poles and zeros
+
+ct.pzmap(Ts1)
+
+dom1 = int(input("Enter index for dominant pole: "))
+
+sigma_d1 = abs(np.real(p1_vals[dom1]))
+omega_d1 = abs(np.imag(p1_vals[dom1]))
+
+#Second order appox b / s^2 + as + b
+
+a = 2 * sigma_d1
+
+omega_n1 = np.sqrt(sigma_d1**2 + omega_d1**2)
+
+b = omega_n1**2
+
+Ts2 = ct.tf([b], [1, a, b])
+
+#Plot step response
+
+t2_vals, c2_vals = ct.step_response(Ts2)
+t1_vals, c1_vals = ct.step_response(Ts1)
+plt.figure()
+plt.plot(t2_vals, c2_vals, label="Second order system")
+plt.plot(t1_vals, c1_vals, label="Original system")
+plt.title("Step response of Original System and Second order approximation")
+plt.xlabel("Time")
+plt.ylabel("Output")
+plt.show()
+
+#State whether the second order is valid
+
+##Q4
+
+
+G_nonunity = ct.tf(10, np.poly([0, -2,-6]))
+H_nonunity = ct.tf(1, [1,4])
+
+Gf = G_nonunity / (1 + G_nonunity * H_nonunity - G_nonunity)
+Gf = ct.minreal(Gf)
+
+#Calculate Kp
+
+Kp = ct.dcgain(Gf)
+
+R = 5
+
+ess = R / (1 + Kp)
+
+T_unity = ct.feedback(Gf, 1)
+
+
+t4_vals, c4_vals = ct.step_response(T_unity)
+plt.figure()
+plt.plot(t4_vals, c4_vals)
+plt.plot(t4_vals, 5*c4_vals)
+plt.show()
+
+##Q5
+
+G_unity = ct.tf(1, [1.12725, 1.2, 0])
+
+C = Kp
+
+#Damping ration
+OS1 = 9
+
+Zeta1 = -np.log(OS1 / 100) / np.sqrt(np.pi**2 + np.log(OS1 / 100)**2)
+
+## vector gain
+
+values = np.linspace(0, 50, 1000)
+
+#rlocfind
+
+K_selected, selected_point = rlocfind(G_unity, values, [-5,1],[-5,5], Zeta1)
+G_gain = K_selected * G_unity
+T_selected = ct.feedack(G_gain, 1)
+#Step response
+
+t3_vals, c3_vals = ct.step_response(T_selected)
+plt.figure()
+plt.plot(t3_vals, c3_vals)
+plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      
+
+
+
+
+
+
